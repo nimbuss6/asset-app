@@ -64,31 +64,27 @@ select{background:var(--surface)}
   <div id="manageView" hidden></div>
 </main>
 <script>
+var SHEET_URL='https://script.google.com/macros/s/AKfycbzDzuH7ao32SlGhb87p03YlWtR2Yy-JR5h_qECbK7NPkVl6AU1c3z9XH42seVZFznNS6A/exec';
 var COL={cash:'#1f6f5c',stock:'#3b6ea5',gold:'#c49a2c',pension:'#8a5aa8'};
 var GROUPS=[
  {k:'cash',t:'현금 계좌',f:[['n','계좌명','text'],['a','금액(원)','num']]},
  {k:'savings',t:'적금 (메인에서는 현금에 포함)',f:[['n','상품명','text'],['start','가입일','date'],['end','만기일','date'],['paid','현재 납입액(원)','num'],['exp','만기 예상 수령액(원)','num']]},
- {k:'stock',t:'주식',hint:'시장을 미국으로 고르면 평균 매입가와 현재가를 달러($)로, 한국으로 고르면 원으로 입력해요. 현재가를 고치면 입력한 시각이 같이 기록돼요. 같은 시장·종목명을 다시 추가하면 평균 매입가가 자동으로 합산돼요.',f:[['m','시장','sel'],['n','종목명','text'],['avg','평균 매입가','dec'],['qty','수량','dec'],['cur','현재가','dec']]},
+ {k:'stock',t:'주식',hint:'시세 코드는 구글 시트 A열과 같게 입력하세요 (예: NASDAQ:AAPL, KRX:005930). 입력하면 현재가와 환율이 자동으로 채워져요. 같은 시장·종목명을 다시 추가하면 평균 매입가가 자동으로 합산돼요.',f:[['m','시장','sel'],['n','종목명','text'],['code','시세 코드','text'],['avg','평균 매입가','dec'],['qty','수량','dec'],['cur','현재가 (자동)','dec']]},
  {k:'gold',t:'금',f:[['n','보유 내역','text'],['a','평가금액(원)','num']]},
  {k:'pension',t:'연금',f:[['n','계좌명','text'],['a','금액(원)','num']]}
 ];
 var SAMPLE={fx:1400,
  cash:[{n:'예시) 국민은행 입출금',a:3500000},{n:'예시) 토스뱅크',a:1200000}],
  savings:[{n:'예시) 12개월 적금',start:'2026-03-01',end:'2027-03-01',paid:2000000,exp:4150000}],
- stock:[{m:'KR',n:'예시) 삼성전자',avg:70000,qty:10,cur:75000},{m:'US',n:'예시) AAPL',avg:180,qty:5,cur:230}],
+ stock:[{m:'KR',n:'예시) 삼성전자',code:'KRX:005930',avg:70000,qty:10,cur:75000},{m:'US',n:'예시) AAPL',code:'NASDAQ:AAPL',avg:180,qty:5,cur:230}],
  gold:[{n:'예시) 금 5돈',a:2800000}],
  pension:[{n:'예시) 연금저축',a:6000000}]};
 var KEY='asset-app-v2',data=null;
 try{var s=localStorage.getItem(KEY);if(s)data=JSON.parse(s)}catch(e){}
-if(!data||typeof data!=='object'){
-  data=JSON.parse(JSON.stringify(SAMPLE));
-  try{var o=JSON.parse(localStorage.getItem('asset-overview-v1'));
-    if(o){['cash','gold','pension'].forEach(function(k){if(Array.isArray(o[k]))data[k]=o[k]});
-      if(Array.isArray(o.savings))o.savings.forEach(function(x){data.cash.push(x)});
-      if(Array.isArray(o.stock))data.stock=o.stock.map(function(x){return{m:'KR',n:x.n,avg:x.a,qty:1,cur:x.a}})}}catch(e){}
-}
+if(!data||typeof data!=='object')data=JSON.parse(JSON.stringify(SAMPLE));
 GROUPS.forEach(function(g){if(!Array.isArray(data[g.k]))data[g.k]=[]});
 if(!data.fx)data.fx=1400;
+var quote={ok:undefined,at:0};
 function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
 function n0(v){return Math.round(v||0).toLocaleString('ko-KR')}
@@ -101,7 +97,30 @@ function sc(it){return (it.qty||0)*(it.avg||0)*fx(it)}
 function sum(a,f){return a.reduce(function(t,i){return t+f(i)},0)}
 function pct(v){return (v>0?'+':'')+v.toFixed(2)+'%'}
 function cls(v){return v>0?'up':v<0?'dn':''}
-function fmtAt(t){var d=new Date(t),p=function(x){return x<10?'0'+x:x};return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes())}
+function pad(x){return x<10?'0'+x:''+x}
+function fmtAt(t){var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
+function fmtFull(t){var d=new Date(t);return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+d.getHours()+'시 '+pad(d.getMinutes())+'분'}
+
+function loadQuotes(){
+  fetch(SHEET_URL,{cache:'no-store'}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(typeof j.usdkrw==='number'&&j.usdkrw>0)data.fx=Math.round(j.usdkrw*100)/100;
+    var at=j.fetchedAt?Date.parse(j.fetchedAt):Date.now();
+    data.stock.forEach(function(it){
+      var code=it.code?String(it.code).trim():'';
+      var p=(code&&j.prices)?j.prices[code]:undefined;
+      if(typeof p==='number'&&p>0){it.cur=p;it.at=at}
+    });
+    quote={ok:true,at:at};
+    save();
+  }).catch(function(){
+    quote={ok:false,at:0};
+  }).then(function(){
+    if(location.hash!=='#manage')renderMain();
+  });
+}
 
 function row(title,sub,top,bot,tag,botCls){
   var r=el('div','r'),l=el('div'),t=el('div','t',title);
@@ -148,7 +167,7 @@ function renderMain(){
   data.stock.forEach(function(i){
     var r=i.avg>0?(i.cur/i.avg-1)*100:0;
     var usd=i.m==='US'?'$'+((i.qty||0)*(i.cur||0)).toLocaleString('en-US',{maximumFractionDigits:2})+' · ':'';
-    s2.appendChild(row(i.n,(i.qty||0)+'주 · 평균 '+pxa(i)+' → 현재 '+px(i)+(i.at?' ('+fmtAt(i.at)+' 입력)':''),won(sv(i)),usd+pct(r),i.m==='US'?'미국':'한국',cls(r)));
+    s2.appendChild(row(i.n,(i.qty||0)+'주 · 평균 '+pxa(i)+' → 현재 '+px(i)+(i.at?' ('+fmtAt(i.at)+' 시세)':''),won(sv(i)),usd+pct(r),i.m==='US'?'미국':'한국',cls(r)));
   });
   if(!data.stock.length)s2.appendChild(el('div','empty','등록된 항목이 없어요.'));
   V.appendChild(s2);
@@ -159,8 +178,12 @@ function renderMain(){
     if(!data[c[1]].length)s.appendChild(el('div','empty','등록된 항목이 없어요.'));
     V.appendChild(s);
   });
-  var hasUS=data.stock.some(function(i){return i.m==='US'});
-  V.appendChild(el('p','note',(hasUS?'미국 주식은 환율 '+n0(data.fx)+'원/$ 기준으로 환산했어요. ':'')+'수익률은 매입 평균가 대비 현재가 기준이에요.'));
+
+  var note;
+  if(quote.ok===undefined)note='시세를 불러오는 중이에요.';
+  else if(!quote.ok)note='시세를 가져오지 못해 마지막으로 저장된 값을 보여줘요.';
+  else note='환율 '+n0(data.fx)+'원/$ ('+fmtFull(quote.at)+' 고시 기준)';
+  V.appendChild(el('p','note',note+'. 수익률은 매입 평균가 대비 현재가 기준이에요.'));
 }
 
 function fmtIn(v,t){if(v==null||v==='')return '';return t==='num'?Number(v).toLocaleString('ko-KR'):String(v)}
@@ -184,7 +207,7 @@ function field(o,f,cb){
 function renderManage(){
   var V=document.getElementById('manageView');V.innerHTML='';
   var fs=el('section'),fh=el('div','head');fh.appendChild(el('h2',null,'환율'));fs.appendChild(fh);
-  fs.appendChild(el('p','hint','미국 주식 평가금액을 원화로 바꿀 때 쓰는 값이에요. 직접 입력해 주세요.'));
+  fs.appendChild(el('p','hint','구글 시트에서 자동으로 채워져요. 자동 조회가 안 되면 직접 입력할 수 있어요.'));
   var fxo={fx:data.fx},fw=field(fxo,['fx','원/$','dec'],function(){data.fx=fxo.fx||data.fx;save()});
   fw.classList.add('fx');fw.style.marginBottom='12px';fs.appendChild(fw);V.appendChild(fs);
 
@@ -206,7 +229,7 @@ function renderManage(){
       if(draft.cur)draft.at=Date.now();
       if(g.k==='stock'){
         var ex=data.stock.filter(function(x){return x.m===draft.m&&x.n.toLowerCase()===draft.n.toLowerCase()})[0];
-        if(ex){var q=(ex.qty||0)+(draft.qty||0);ex.avg=q?((ex.avg||0)*(ex.qty||0)+(draft.avg||0)*(draft.qty||0))/q:0;ex.qty=q;if(draft.cur){ex.cur=draft.cur;ex.at=draft.at}}
+        if(ex){var q=(ex.qty||0)+(draft.qty||0);ex.avg=q?((ex.avg||0)*(ex.qty||0)+(draft.avg||0)*(draft.qty||0))/q:0;ex.qty=q;if(draft.code)ex.code=draft.code;if(draft.cur){ex.cur=draft.cur;ex.at=draft.at}}
         else data.stock.push(draft);
       }else data[g.k].push(draft);
       save();rerender();
@@ -227,6 +250,7 @@ document.getElementById('tab-main').addEventListener('click',function(){location
 document.getElementById('tab-manage').addEventListener('click',function(){location.hash='manage'});
 window.addEventListener('hashchange',show);
 show();
+loadQuotes();
 </script>
 </body>
 </html>
