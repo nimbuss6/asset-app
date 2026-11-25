@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>내 자산</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#f4f5f2;--surface:#fff;--ink:#1d2a2a;--muted:#6b7776;--line:#dfe3df;--accent:#1f6f5c;--on:#fff;--danger:#b4443a;--up:#d6453d;--dn:#3b6ea5;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121816;--surface:#1b2422;--ink:#e8eeec;--muted:#93a19e;--line:#2b3734;--accent:#5cc2a5;--on:#10201b;--danger:#e0766c;--up:#ef6b62;--dn:#6fa3dc}}
+:root[data-theme="dark"]{--bg:#121816;--surface:#1b2422;--ink:#e8eeec;--muted:#93a19e;--line:#2b3734;--accent:#5cc2a5;--on:#10201b;--danger:#e0766c;--up:#ef6b62;--dn:#6fa3dc}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;line-height:1.5}
+main{max-width:680px;margin:0 auto;padding:12px 18px 64px}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+nav button{font:inherit;font-weight:500;background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;cursor:pointer;margin-bottom:-1px}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent)}
+.total{padding:24px 0 22px}
+.total h1{margin:0;font-size:15px;font-weight:500;color:var(--muted)}
+.total .num{font-size:clamp(34px,9vw,52px);font-weight:700;letter-spacing:-.02em;margin:2px 0 14px;font-variant-numeric:tabular-nums}
+.split{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line)}
+.split span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 16px 8px;margin-top:14px}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+.head h2{margin:0;font-size:17px}
+.head .sub{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.head .sub small{color:var(--muted);font-weight:400;font-size:13px;margin-left:6px}
+.subh{margin:12px 0 0;font-size:13px;color:var(--muted);font-weight:500}
+.r{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.head+.r,.subh+.r{border-top:0}
+.r .t{font-weight:500}
+.r .s{font-size:13px;color:var(--muted)}
+.rr{text-align:right;font-variant-numeric:tabular-nums;flex:none}
+.tag{display:inline-block;font-size:11px;font-weight:500;border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:6px;color:var(--muted);vertical-align:1px}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.empty{color:var(--muted);font-size:14px;padding:8px 0}
+.note{margin-top:20px;font-size:12px;color:var(--muted)}
+.item{position:relative;border-top:1px solid var(--line);padding:12px 34px 12px 0}
+.head+.item,.hint+.item{border-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.fld{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);min-width:0}
+input,select{font:inherit;font-size:14px;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%;min-width:0}
+select{background:var(--surface)}
+.del{position:absolute;top:10px;right:0;border:0;background:transparent;color:var(--muted);font-size:20px;cursor:pointer;width:28px;height:28px;border-radius:6px;line-height:1}
+.del:hover{color:var(--danger)}
+.item.add{padding-right:0;border-top:1px dashed var(--line);margin-top:4px}
+.addbtn{margin-top:10px;font:inherit;font-weight:500;background:var(--accent);color:var(--on);border:0;border-radius:6px;padding:7px 18px;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);margin:0 0 6px}
+.fx{max-width:200px}
+</style>
+</head>
+<body>
+<main>
+  <nav role="tablist">
+    <button role="tab" id="tab-main" aria-selected="true">메인</button>
+    <button role="tab" id="tab-manage" aria-selected="false">관리</button>
+  </nav>
+  <div id="mainView"></div>
+  <div id="manageView" hidden></div>
+</main>
+<script>
+var COL={cash:'#1f6f5c',stock:'#3b6ea5',gold:'#c49a2c',pension:'#8a5aa8'};
+var GROUPS=[
+ {k:'cash',t:'현금 계좌',f:[['n','계좌명','text'],['a','금액(원)','num']]},
+ {k:'savings',t:'적금 (메인에서는 현금에 포함)',f:[['n','상품명','text'],['start','가입일','date'],['end','만기일','date'],['paid','현재 납입액(원)','num'],['exp','만기 예상 수령액(원)','num']]},
+ {k:'stock',t:'주식',hint:'시장을 미국으로 고르면 평균 매입가와 현재가를 달러($)로, 한국으로 고르면 원으로 입력해요. 현재가를 고치면 입력한 시각이 같이 기록돼요. 같은 시장·종목명을 다시 추가하면 평균 매입가가 자동으로 합산돼요.',f:[['m','시장','sel'],['n','종목명','text'],['avg','평균 매입가','dec'],['qty','수량','dec'],['cur','현재가','dec']]},
+ {k:'gold',t:'금',f:[['n','보유 내역','text'],['a','평가금액(원)','num']]},
+ {k:'pension',t:'연금',f:[['n','계좌명','text'],['a','금액(원)','num']]}
+];
+var SAMPLE={fx:1400,
+ cash:[{n:'예시) 국민은행 입출금',a:3500000},{n:'예시) 토스뱅크',a:1200000}],
+ savings:[{n:'예시) 12개월 적금',start:'2026-03-01',end:'2027-03-01',paid:2000000,exp:4150000}],
+ stock:[{m:'KR',n:'예시) 삼성전자',avg:70000,qty:10,cur:75000},{m:'US',n:'예시) AAPL',avg:180,qty:5,cur:230}],
+ gold:[{n:'예시) 금 5돈',a:2800000}],
+ pension:[{n:'예시) 연금저축',a:6000000}]};
+var KEY='asset-app-v2',data=null;
+try{var s=localStorage.getItem(KEY);if(s)data=JSON.parse(s)}catch(e){}
+if(!data||typeof data!=='object'){
+  data=JSON.parse(JSON.stringify(SAMPLE));
+  try{var o=JSON.parse(localStorage.getItem('asset-overview-v1'));
+    if(o){['cash','gold','pension'].forEach(function(k){if(Array.isArray(o[k]))data[k]=o[k]});
+      if(Array.isArray(o.savings))o.savings.forEach(function(x){data.cash.push(x)});
+      if(Array.isArray(o.stock))data.stock=o.stock.map(function(x){return{m:'KR',n:x.n,avg:x.a,qty:1,cur:x.a}})}}catch(e){}
+}
+GROUPS.forEach(function(g){if(!Array.isArray(data[g.k]))data[g.k]=[]});
+if(!data.fx)data.fx=1400;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function n0(v){return Math.round(v||0).toLocaleString('ko-KR')}
+function won(v){return n0(v)+'원'}
+function px(it){return it.m==='US'?'$'+(it.cur||0).toLocaleString('en-US',{maximumFractionDigits:2}):won(it.cur)}
+function pxa(it){return it.m==='US'?'$'+(it.avg||0).toLocaleString('en-US',{maximumFractionDigits:2}):won(it.avg)}
+function fx(it){return it.m==='US'?data.fx:1}
+function sv(it){return (it.qty||0)*(it.cur||0)*fx(it)}
+function sc(it){return (it.qty||0)*(it.avg||0)*fx(it)}
+function sum(a,f){return a.reduce(function(t,i){return t+f(i)},0)}
+function pct(v){return (v>0?'+':'')+v.toFixed(2)+'%'}
+function cls(v){return v>0?'up':v<0?'dn':''}
+function fmtAt(t){var d=new Date(t),p=function(x){return x<10?'0'+x:x};return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes())}
+
+function row(title,sub,top,bot,tag,botCls){
+  var r=el('div','r'),l=el('div'),t=el('div','t',title);
+  if(tag)t.appendChild(el('span','tag',tag));
+  l.appendChild(t);if(sub)l.appendChild(el('div','s',sub));
+  var rr=el('div','rr');rr.appendChild(el('div','t',top));
+  if(bot){var b=el('div','s',bot);if(botCls)b.className='s '+botCls;rr.appendChild(b)}
+  r.appendChild(l);r.appendChild(rr);return r;
+}
+function sec(title,total,all,extra){
+  var s=el('section'),h=el('div','head');h.appendChild(el('h2',null,title));
+  var sb=el('div','sub',won(total));sb.appendChild(el('small',null,(all>0?total/all*100:0).toFixed(1)+'%'));
+  if(extra){var e=el('div','s',extra.t);if(extra.c)e.className='s '+extra.c;sb.appendChild(e)}
+  h.appendChild(sb);s.appendChild(h);return s;
+}
+
+function renderMain(){
+  var cashT=sum(data.cash,function(i){return i.a})+sum(data.savings,function(i){return i.paid}),
+      stockT=sum(data.stock,sv),goldT=sum(data.gold,function(i){return i.a}),penT=sum(data.pension,function(i){return i.a}),
+      all=cashT+stockT+goldT+penT;
+  var V=document.getElementById('mainView');V.innerHTML='';
+  var tot=el('div','total');tot.appendChild(el('h1',null,'총 자산'));tot.appendChild(el('div','num',won(all)));
+  var sp=el('div','split'),lg=el('div','legend');
+  [['cash','현금',cashT],['stock','주식',stockT],['gold','금',goldT],['pension','연금',penT]].forEach(function(c){
+    var p=all>0?c[2]/all*100:0;
+    if(p>0){var b=el('span');b.style.width=p+'%';b.style.background=COL[c[0]];sp.appendChild(b)}
+    var l=el('span'),d=el('i');d.style.background=COL[c[0]];l.appendChild(d);l.appendChild(document.createTextNode(c[1]+' '+p.toFixed(1)+'%'));lg.appendChild(l);
+  });
+  tot.appendChild(sp);tot.appendChild(lg);V.appendChild(tot);
+
+  var s1=sec('현금',cashT,all);
+  data.cash.forEach(function(i){s1.appendChild(row(i.n,'',won(i.a)))});
+  if(data.savings.length){
+    s1.appendChild(el('div','subh','적금'));
+    data.savings.forEach(function(i){
+      s1.appendChild(row(i.n,(i.start||'-')+' ~ '+(i.end||'-'),won(i.paid),'만기 예상 '+won(i.exp)));
+    });
+  }
+  if(!data.cash.length&&!data.savings.length)s1.appendChild(el('div','empty','등록된 항목이 없어요.'));
+  V.appendChild(s1);
+
+  var cost=sum(data.stock,sc),gain=stockT-cost,gp=cost>0?gain/cost*100:0;
+  var s2=sec('주식',stockT,all,data.stock.length?{t:'평가손익 '+(gain>0?'+':'')+won(gain)+' ('+pct(gp)+')',c:cls(gain)}:null);
+  data.stock.forEach(function(i){
+    var r=i.avg>0?(i.cur/i.avg-1)*100:0;
+    var usd=i.m==='US'?'$'+((i.qty||0)*(i.cur||0)).toLocaleString('en-US',{maximumFractionDigits:2})+' · ':'';
+    s2.appendChild(row(i.n,(i.qty||0)+'주 · 평균 '+pxa(i)+' → 현재 '+px(i)+(i.at?' ('+fmtAt(i.at)+' 입력)':''),won(sv(i)),usd+pct(r),i.m==='US'?'미국':'한국',cls(r)));
+  });
+  if(!data.stock.length)s2.appendChild(el('div','empty','등록된 항목이 없어요.'));
+  V.appendChild(s2);
+
+  [['금','gold',goldT],['연금','pension',penT]].forEach(function(c){
+    var s=sec(c[0],c[2],all);
+    data[c[1]].forEach(function(i){s.appendChild(row(i.n,'',won(i.a)))});
+    if(!data[c[1]].length)s.appendChild(el('div','empty','등록된 항목이 없어요.'));
+    V.appendChild(s);
+  });
+  var hasUS=data.stock.some(function(i){return i.m==='US'});
+  V.appendChild(el('p','note',(hasUS?'미국 주식은 환율 '+n0(data.fx)+'원/$ 기준으로 환산했어요. ':'')+'수익률은 매입 평균가 대비 현재가 기준이에요.'));
+}
+
+function fmtIn(v,t){if(v==null||v==='')return '';return t==='num'?Number(v).toLocaleString('ko-KR'):String(v)}
+function conv(v,t){
+  if(t==='num'){var n=parseInt(String(v).replace(/[^0-9\-]/g,''),10);return isNaN(n)?0:n}
+  if(t==='dec'){var d=parseFloat(String(v).replace(/,/g,''));return isNaN(d)?0:d}
+  return v.trim();
+}
+function field(o,f,cb){
+  var w=el('label','fld');w.appendChild(el('span',null,f[1]));var i;
+  if(f[2]==='sel'){
+    i=el('select');[['KR','한국'],['US','미국']].forEach(function(p){var op=el('option',null,p[1]);op.value=p[0];i.appendChild(op)});
+    i.value=o[f[0]]||'KR';i.addEventListener('change',function(){o[f[0]]=i.value;cb()});
+  }else{
+    i=el('input');if(f[2]==='date')i.type='date';else if(f[2]!=='text')i.inputMode='decimal';
+    i.value=fmtIn(o[f[0]],f[2]);
+    i.addEventListener('change',function(){o[f[0]]=conv(i.value,f[2]);i.value=fmtIn(o[f[0]],f[2]);cb()});
+  }
+  w.appendChild(i);return w;
+}
+function renderManage(){
+  var V=document.getElementById('manageView');V.innerHTML='';
+  var fs=el('section'),fh=el('div','head');fh.appendChild(el('h2',null,'환율'));fs.appendChild(fh);
+  fs.appendChild(el('p','hint','미국 주식 평가금액을 원화로 바꿀 때 쓰는 값이에요. 직접 입력해 주세요.'));
+  var fxo={fx:data.fx},fw=field(fxo,['fx','원/$','dec'],function(){data.fx=fxo.fx||data.fx;save()});
+  fw.classList.add('fx');fw.style.marginBottom='12px';fs.appendChild(fw);V.appendChild(fs);
+
+  GROUPS.forEach(function(g){
+    var s=el('section'),h=el('div','head');h.appendChild(el('h2',null,g.t));s.appendChild(h);
+    if(g.hint)s.appendChild(el('p','hint',g.hint));
+    data[g.k].forEach(function(it,idx){
+      var c=el('div','item'),gr=el('div','grid');
+      g.f.forEach(function(f){gr.appendChild(field(it,f,f[0]==='cur'?function(){it.at=Date.now();save()}:save))});
+      var d=el('button','del','×');d.type='button';d.setAttribute('aria-label','삭제');
+      d.addEventListener('click',function(){data[g.k].splice(idx,1);save();rerender()});
+      c.appendChild(gr);c.appendChild(d);s.appendChild(c);
+    });
+    var draft={m:'KR'},ad=el('div','item add'),ag=el('div','grid');
+    g.f.forEach(function(f){ag.appendChild(field(draft,f,function(){}))});
+    var b=el('button','addbtn','추가');b.type='button';
+    b.addEventListener('click',function(){
+      if(!draft.n)return;
+      if(draft.cur)draft.at=Date.now();
+      if(g.k==='stock'){
+        var ex=data.stock.filter(function(x){return x.m===draft.m&&x.n.toLowerCase()===draft.n.toLowerCase()})[0];
+        if(ex){var q=(ex.qty||0)+(draft.qty||0);ex.avg=q?((ex.avg||0)*(ex.qty||0)+(draft.avg||0)*(draft.qty||0))/q:0;ex.qty=q;if(draft.cur){ex.cur=draft.cur;ex.at=draft.at}}
+        else data.stock.push(draft);
+      }else data[g.k].push(draft);
+      save();rerender();
+    });
+    ad.appendChild(ag);ad.appendChild(b);s.appendChild(ad);V.appendChild(s);
+  });
+}
+function rerender(){var y=window.scrollY;renderManage();window.scrollTo(0,y)}
+
+function show(){
+  var m=location.hash==='#manage';
+  document.getElementById('tab-main').setAttribute('aria-selected',String(!m));
+  document.getElementById('tab-manage').setAttribute('aria-selected',String(m));
+  document.getElementById('mainView').hidden=m;document.getElementById('manageView').hidden=!m;
+  if(m)renderManage();else renderMain();
+}
+document.getElementById('tab-main').addEventListener('click',function(){location.hash='main'});
+document.getElementById('tab-manage').addEventListener('click',function(){location.hash='manage'});
+window.addEventListener('hashchange',show);
+show();
+</script>
+</body>
+</html>
